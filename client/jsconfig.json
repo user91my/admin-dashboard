@@ -1,0 +1,8 @@
+{
+  "__comment__baseUrl": "module or path imports will start from 'src' directory",
+  "compilerOptions": {
+    "baseUrl": "src"
+  },
+  "__comment__include": "tells compiler to ONLY consider all files and subdirectories within 'src' directory as part of the project (any js files outside 'src' will be excluded)",
+  "include": ["src"]
+}
