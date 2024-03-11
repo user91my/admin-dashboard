@@ -34,7 +34,7 @@ const DataGridCustomToolbar = ({ searchInput, setSearchInput, setSearch }) => {
         </FlexBetween>
 
         <TextField
-          label="Search..."
+          label="Search <User ID & Cost only>"
           sx={{
             mb: "0.5rem",
             ml: isMinWidth525px && "4rem",

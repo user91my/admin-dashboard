@@ -66,10 +66,14 @@ const Performance = () => {
     },
     {
       field: "cost",
-      headerName: "Cost",
+      headerName: "Cost ($)",
       flex: isMinWidth1300px && 1,
       width: !isMinWidth1300px && 100,
-      renderCell: (params) => `$${Number(params.value).toFixed(2)}`,
+      // In order to be sorted properly (i.e. lowest dollar value to
+      // highest and vice versa), type needs to be set to "number".
+      // This requirement only applies to client-side sorting.
+      type: "number",
+      renderCell: (params) => Number(params.value).toFixed(2),
     },
   ];
 

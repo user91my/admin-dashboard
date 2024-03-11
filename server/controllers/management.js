@@ -1,7 +1,6 @@
 import mongoose from "mongoose";
 import User from "../models/User.js";
 import Transaction from "../models/Transaction.js";
-import AffiliateStat from "../models/AffiliateStat.js";
 
 export const getAdmins = async (req, res) => {
   try {
@@ -65,7 +64,8 @@ export const getUserPerformance = async (req, res) => {
       // -----------------
       // https://www.mongodb.com/docs/manual/reference/operator/aggregation/unwind/#mongodb-pipeline-pipe.-unwind
       // Flattens the newly added "affiliateStats" array field (from $lookup stage) by one level.
-      // (NOTE: The array field "affiliateStats" has to be prefixed with a dollar sign ($).)
+      // (NOTE: Reference to the value of the "affiliateStats" field has to be prefixed with a dollar sign ($).
+      //        "$affiliateStats" is a field path expression.)
       // Initial data structure for "affiliateStats" field :-
       //      affiliateStats : [ {...} ]
       // Data structure after unwinding :-
@@ -73,8 +73,9 @@ export const getUserPerformance = async (req, res) => {
       { $unwind: "$affiliateStats" },
     ]);
 
+    // THEREFORE,
     // Data structure for "userWithStats" :-
-    //     [ { _id, email, affiliateStats, ... } ]
+    //     [ { _id , name , email , ..... , affiliateStats } ]
     // Therefore we select the FIRST and ONLY element via "userWithStats[0]".
     // Data structure for "affiliateStats" field :-
     //     affiliateStats : { affiliateSales , ... }

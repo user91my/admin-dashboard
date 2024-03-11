@@ -50,37 +50,97 @@ export const getTransactions = async (req, res) => {
     // Initial defaults for variables 'page','pageSize','sort', etc....
     // After 'req.query' is received from the frontend, these variables
     // will be updated accordingly.
-    // Btw, 'sort' object received from the frontend should look like the following :-
-    //     { field: "userId", sort: "desc" }
-    const { page = 1, pageSize = 20, sort = null, search = "" } = req.query;
+    // Btw, the "sort" string received from the frontend should look like the following :-
+    //     "{ field: "userId", sort: "desc" }"
+    // It's actually a JS object but unparsed yet, therefore in string format.
+    const { page = 0, pageSize = 20, sort = null, search = "" } = req.query;
 
-    // The formatted sort ('sortFormatted') should look something as such :-
-    //     { userId: -1 }
+    // The raw unparsed 'sort' string would look something like this :-
+    //     "{"field": "cost", "sort": "asc"}"
+    // After parsing 'sort, 'sortFormatted' should look something as such :-
+    //     { cost: 1 }
     const generateSort = () => {
       // "JSON.parse(sort)" converts 'sort' from a text string into a JS object.
       const sortParsed = JSON.parse(sort);
       const sortFormatted = {
-        [sortParsed.field]: (sortParsed.sort = "asc" ? 1 : -1),
+        [sortParsed.field]: sortParsed.sort === "asc" ? 1 : -1,
       };
       return sortFormatted;
     };
-
     const sortFormatted = Boolean(sort) ? generateSort() : {};
 
+    // Function to structure the aggregation pipeline.
+    const generatePipeline = () => {
+      const sortParsed = JSON.parse(sort);
+      const pipelineArr = [
+        {
+          // Note: Matching "_id" field will not work here because "_id"
+          //       value needs to be in "ObjectId" format.
+          //       In "dataTransaction" ("server\data\index.js"), the
+          //       _id's field value is a simple string.
+          $match: {
+            $or: [
+              { userId: { $regex: new RegExp(search, "i") } },
+              { cost: { $regex: new RegExp(search, "i") } },
+            ],
+          },
+        },
+        // "$addFields" + "$toDouble" operators may be conditionally
+        // added to this part of the pipeline depending on whether
+        // the client queries to sort the datagrid table on the basis
+        // of the "cost" field or not.
+        // Conditionally adding these operators to the pipeline will
+        // avoid having to unncessarily rerun them on every query.
+        //
+        // "$toDouble" is necessary to ensure that the values of
+        // the "cost" field are numerical and not strings.
+        // "$addFields" overwrites the existing "cost" field values
+        // from string to their respective numerical counterpart.
+        //
+        // {
+        //   $addFields: {
+        //     cost: { $toDouble: "$cost" },
+        //   },
+        // },
+        {
+          $sort: sortFormatted,
+        },
+        {
+          $skip: Number(page * pageSize),
+        },
+        {
+          $limit: Number(pageSize),
+        },
+      ];
+
+      // Overwrite the 'cost' field with its numeric version so
+      // that the cost columns is numerically sorted.
+      // "$toDouble" operator converts a value to a double-precision
+      // floating-point number. Useful when performing arithmetic
+      // operations on values that are stored as strings.
+      const convertCostStringToNumber = {
+        $addFields: {
+          // "$cost" is a field path expression referring to the
+          // value of the "cost" field in the current document
+          // being processed by the aggregation pipeline.
+          cost: { $toDouble: "$cost" },
+        },
+      };
+
+      // Adds the "$addFields" operator into the aggregation pipeline
+      // if the client requests to sort by "cost" field.
+      if (sortParsed.field === "cost")
+        pipelineArr.splice(1, 0, convertCostStringToNumber);
+
+      return pipelineArr;
+    };
+
     // Sorting, skipping and limiting the queried data.
-    // Note: Querying "_id" field will not work here because "_id"
-    //       value needs to be in "ObjectId" format.
-    //       In "dataTransaction" ("server\data\index.js"), the
-    //       _id's field value is a simple string.
-    const transactions = await Transaction.find({
-      $or: [
-        { cost: { $regex: new RegExp(search, "i") } },
-        { userId: { $regex: new RegExp(search, "i") } },
-      ],
-    })
-      .sort(sortFormatted) // sort in ascending/descending order. 'sortFormatted' should be structured like "{ userId: -1 }".
-      .skip(page * pageSize) // skips the first `page*pageSize` results
-      .limit(pageSize); // limit the returned results to the first `pageSize` results.
+    // MongoDB aggregation operations explanation :-
+    // https://www.mongodb.com/docs/manual/aggregation/
+    // MongoDB list of aggregation pipeline stages (e.g. $match, $lookup, $unwind, etc...) :-
+    // https://www.mongodb.com/docs/manual/reference/operator/aggregation-pipeline/#std-label-aggregation-pipeline-operator-reference
+    const transactions = await Transaction.aggregate(generatePipeline());
 
     // Gives us the total count of documents queried.
     const total = await Transaction.countDocuments();
